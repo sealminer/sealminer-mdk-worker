@@ -1,0 +1,21 @@
+{
+  "STATUS": [
+    {
+      "STATUS": "S",
+      "When": 1789959760,
+      "Code": 78,
+      "Msg": "BDMiner coin",
+      "Description": "bdminer 4.11.1"
+    }
+  ],
+  "COIN": [
+    {
+      "Hash Method": "sha256",
+      "Current Block Time": 1789958568.967729,
+      "Current Block Hash": "00000000000000000000bb670df3905e3a264222bf836e850c4b782efa4ee1de",
+      "LP": true,
+      "Network Difficulty": 132757073449487.52
+    }
+  ],
+  "id": 1
+}

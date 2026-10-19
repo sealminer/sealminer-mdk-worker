@@ -1,0 +1,115 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # MDK is pre-1.0: the contract schema and the runtime still move, so the
+  # checkout is pinned. Bump this deliberately, with the test suite as the gate.
+  MDK_REF: v0.8.0
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # No CI strategy matrix on purpose: the series × firmware matrix runs
+    # in-process in tests/unit/matrix.test.js, so it covers all 9 combinations
+    # on a developer's machine too rather than only in CI.
+
+    steps:
+      - name: Check out Worker
+        uses: actions/checkout@v4
+        with:
+          path: sealminer-mdk-worker
+
+      - name: Check out MDK
+        uses: actions/checkout@v4
+        with:
+          repository: tetherto/mdk
+          ref: ${{ env.MDK_REF }}
+          path: mdk
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: sealminer-mdk-worker/package-lock.json
+
+      # install-packages.sh would install the whole monorepo; only these two
+      # packages are needed to load the runtime and build protocol envelopes.
+      - name: Install MDK runtime dependencies
+        run: |
+          npm install --prefix mdk/backend/core/mdk-worker
+          npm install --prefix mdk/backend/core/kernel
+
+      - name: Install Worker dependencies
+        working-directory: sealminer-mdk-worker
+        run: npm ci
+
+      # Runtime dependencies gate the build; dev dependencies only report.
+      # This package has exactly one runtime dependency, so a high advisory
+      # there is both rare and genuinely worth stopping for. A new advisory in
+      # a transitive dev dependency — a linter's parser, a test runner's
+      # bundler — cannot reach a miner, and blocking every branch on it
+      # teaches people to ignore the job.
+      - name: Audit runtime dependencies
+        working-directory: sealminer-mdk-worker
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit dev dependencies (report only)
+        working-directory: sealminer-mdk-worker
+        continue-on-error: true
+        run: npm audit
+
+      - name: Lint
+        working-directory: sealminer-mdk-worker
+        run: npm run lint
+
+      - name: Validate contract
+        working-directory: sealminer-mdk-worker
+        run: npm run validate:contract
+
+      - name: Unit tests (includes the 9-combination series × firmware matrix)
+        working-directory: sealminer-mdk-worker
+        run: npm run test:unit
+
+      - name: Integration tests (WorkerRuntimeV2 + protocol envelopes)
+        working-directory: sealminer-mdk-worker
+        env:
+          MDK_REPO: ../mdk
+        run: npm run test:integration
+
+      # The only test that exercises Kernel itself: discovery, HRPC, the
+      # command state machine and Kernel's pre-dispatch bound check. It runs
+      # against the bundled mock on a local DHT testnet, so it needs no
+      # hardware and no internet.
+      - name: End-to-end through Kernel, HRPC and the client SDK
+        working-directory: sealminer-mdk-worker
+        env:
+          MDK_REPO: ../mdk
+        run: npm run test:e2e
+
+      - name: MDK smoke harness
+        working-directory: sealminer-mdk-worker
+        env:
+          MDK_WORKER_BASE: ../mdk/backend/core/mdk-worker
+        run: node ../mdk/packages/mdk-skill/src/skills/mdk-worker-plugin/scripts/worker-smoke.mjs .
+
+      # lib/ and mock/ must stay usable outside MDK: lib/ is a standalone
+      # SealMiner SDK, and a mock that imports the worker's own code could
+      # only ever prove the worker agrees with itself.
+      - name: Enforce the dependency boundary
+        working-directory: sealminer-mdk-worker
+        run: |
+          if grep -rq "@tetherto" lib/ mock/; then
+            echo "lib/ and mock/ must not depend on MDK"
+            grep -rn "@tetherto" lib/ mock/
+            exit 1
+          fi
+          echo "lib/ and mock/ are MDK-free"

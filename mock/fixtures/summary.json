@@ -1,0 +1,45 @@
+{
+  "STATUS": [
+    {
+      "STATUS": "S",
+      "When": 1789959757,
+      "Code": 11,
+      "Msg": "Summary",
+      "Description": "bdminer 4.11.1"
+    }
+  ],
+  "SUMMARY": [
+    {
+      "Elapsed": 331717,
+      "MHS av": 237642720.15,
+      "MHS 5s": 94393509.73,
+      "MHS 1m": 188996203.51,
+      "MHS 5m": 254735624.78,
+      "MHS 15m": 265919443.17,
+      "Found Blocks": 0,
+      "Getworks": 11738,
+      "Accepted": 17967,
+      "Rejected": 0,
+      "Hardware Errors": 0,
+      "Utility": 3.25,
+      "Discarded": 187241,
+      "Stale": 0,
+      "Get Failures": 0,
+      "Local Work": 15548552,
+      "Remote Failures": 0,
+      "Network Blocks": 554,
+      "Total MH": 78830163428561,
+      "Work Utility": 3319830.45,
+      "Difficulty Accepted": 18353029120,
+      "Difficulty Rejected": 0,
+      "Difficulty Stale": 0,
+      "Best Share": 181940592326,
+      "Device Hardware%": 0,
+      "Device Rejected%": 0,
+      "Pool Rejected%": 0,
+      "Pool Stale%": 0,
+      "Last getwork": 1789959757
+    }
+  ],
+  "id": 1
+}

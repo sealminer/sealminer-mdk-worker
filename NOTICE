@@ -1,0 +1,35 @@
+SealMiner MDK Worker
+Copyright 2026 STRAITDEER PTE. LTD.
+
+This product includes software developed at STRAITDEER PTE. LTD.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+This package is a Worker plugin for Tether MDK (https://github.com/tetherto/mdk),
+which is licensed under the Apache License, Version 2.0. It does not bundle or
+redistribute MDK; MDK is resolved from a separate checkout at runtime.
+
+TRADEMARKS AND PRODUCT IMAGERY ARE NOT LICENSED UNDER APACHE 2.0
+
+The Apache License, Version 2.0 grants copyright and patent rights only; by
+its Section 6 it does not grant rights to use a licensor's trade names,
+trademarks or service marks. Accordingly, the following are NOT licensed to
+you by the Apache License in this repository, and no right to use them is
+granted by it:
+
+  - the "Bitdeer" and "SealMiner" names and logos
+  - the product photographs under assets/, which are provided solely so this
+    package's own development console can identify a miner series on screen
+
+You may keep and use them for that purpose as part of this package. Any other
+use — in your own product, site, documentation or marketing — needs separate
+written permission from STRAITDEER PTE. LTD.
+
+"Tether", "MDK" and "MDK by Tether" are marks of Tether Operations, S.A. de
+C.V. and its affiliates. They are used here only to state that this package
+is compatible with MDK by Tether. No endorsement is claimed, and no right to
+use those marks is granted by this repository.

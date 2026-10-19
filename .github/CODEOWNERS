@@ -1,0 +1,17 @@
+# Review ownership.
+#
+# The publishing account is decided: github.com/sealminer. What is still
+# missing is the team inside it — neither the organization nor its teams exist
+# yet, and the name was unclaimed as of 2026-10-02.
+#
+# MAINTAINERS: create the organization and the review team, then uncomment the
+# line below with that team's real slug, before this repository is made public.
+# A CODEOWNERS entry that names an account the host cannot resolve fails
+# silently — no review is requested and nothing says so — which is worse than
+# having no file at all. That is why the line stays commented until the team
+# exists rather than being filled in with a plausible guess.
+#
+#   GitHub:  @org/team    or  @username
+#   GitLab:  @group/team  or  @username   (the internal mirror)
+
+# *  @sealminer/TEAM-TO-BE-CREATED

@@ -1,0 +1,24 @@
+{
+  "STATUS": [
+    {
+      "STATUS": "S",
+      "When": 1789959757,
+      "Code": 33,
+      "Msg": "BDMiner config",
+      "Description": "bdminer 4.11.1"
+    }
+  ],
+  "CONFIG": [
+    {
+      "ASC Count": 1,
+      "PGA Count": 0,
+      "Pool Count": 3,
+      "Strategy": "Failover",
+      "Log Interval": 5,
+      "Device Code": "BTD ",
+      "OS": "Linux",
+      "Hotplug": "None"
+    }
+  ],
+  "id": 1
+}

@@ -1,0 +1,13 @@
+node_modules/
+*.log
+.DS_Store
+store/
+# real-hardware captures are committed on purpose (see mock/fixtures/README.md)
+!mock/fixtures/.gitkeep
+
+# Claude Code's per-developer state. Excluded here rather than relying on a
+# global ignore: settings.local.json accumulates the commands run against
+# real miners, addresses included, and a colleague's machine will not have
+# that global rule.
+# Editor and session scratch, not part of the package
+.claude/

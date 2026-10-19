@@ -1,0 +1,69 @@
+{
+  "name": "sealminer-mdk-worker",
+  "version": "0.1.0",
+  "description": "Official Bitdeer SealMiner Worker plugin for Tether MDK \u2014 an mdk-contract.json plus src/ handler files, loaded from this directory and instantiated per device by WorkerRuntimeV2. It exports no module of its own.",
+  "keywords": [
+    "mdk",
+    "mdk-worker",
+    "bitdeer",
+    "sealminer",
+    "bitcoin",
+    "mining"
+  ],
+  "author": "STRAITDEER PTE. LTD.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "type": "commonjs",
+  "files": [
+    "lib/",
+    "src/",
+    "mock/",
+    "scripts/",
+    "assets/",
+    "mdk-contract.json",
+    "smoke.config.js",
+    "README.md",
+    "USAGE.md",
+    "LICENSE",
+    "NOTICE",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "FIRMWARE.md",
+    "CONTRIBUTING.md"
+  ],
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "validate:contract": "node scripts/validate-contract.js",
+    "mock": "node scripts/run-mock.js",
+    "console": "node scripts/dev-console.js",
+    "test": "npm run lint && npm run validate:contract && npm run test:unit && npm run test:integration",
+    "test:unit": "NODE_ENV=test brittle tests/unit/*.test.js",
+    "test:integration": "NODE_ENV=test brittle tests/integration/*.test.js",
+    "test:e2e": "node tests/e2e/kernel-chain.js",
+    "test:coverage": "NODE_ENV=test brittle --coverage tests/unit/*.test.js"
+  },
+  "dependencies": {
+    "debug": "4.4.1"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "brittle": "3.16.3",
+    "standard": "17.1.2"
+  },
+  "standard": {
+    "ignore": [
+      "node_modules/"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sealminer/sealminer-mdk-worker.git"
+  },
+  "homepage": "https://github.com/sealminer/sealminer-mdk-worker#readme",
+  "bugs": {
+    "url": "https://github.com/sealminer/sealminer-mdk-worker/issues"
+  }
+}

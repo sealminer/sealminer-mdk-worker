@@ -1,0 +1,557 @@
+{
+  "metadata": {
+    "provider": "bitdeer",
+    "deviceFamily": "miner",
+    "brand": "SealMiner",
+    "modelsSupported": [
+      "A2",
+      "A3",
+      "A4"
+    ],
+    "overview": "Controls Bitdeer SealMiner A2/A3/A4 Bitcoin miners over the bdminer 4028 JSON API. The three series share one API; A2 additionally accepts the low_power mining mode. Several write operations are gated on firmware version, and one (resume) was removed from a range of builds — always read the capabilities channel to learn what a specific device actually accepts rather than assuming from the model. Operations affect physical hardware: prioritize thermal safety, never retry a timed-out write, and treat null telemetry as unknown rather than zero. Every write is asynchronous: the firmware answers before it acts, so an accepted command is not a completed one — each command result says when its effect applies and which channel confirms it."
+  },
+  "capabilities": {
+    "telemetry": [
+      {
+        "name": "hashrate_rt",
+        "unit": "TH/s",
+        "type": "number",
+        "handler": "src/telemetry/hashrate-rt.js",
+        "description": "Real-time hashrate over the last minute, from stats MHS(1m). Zero while the miner is suspended or in sleep mode; null when the field is absent. Compare against hashrate_ideal rather than the nameplate rating."
+      },
+      {
+        "name": "hashrate_avg",
+        "unit": "TH/s",
+        "type": "number",
+        "handler": "src/telemetry/hashrate-avg.js",
+        "description": "Average hashrate since boot, from stats MHS(Avg). Low for the first 15 minutes after a restart while the miner tunes."
+      },
+      {
+        "name": "hashrate_ideal",
+        "unit": "TH/s",
+        "type": "number",
+        "handler": "src/telemetry/hashrate-ideal.js",
+        "description": "Hashrate the firmware targets for the active mining mode, from stats MHS(Ideal). The correct denominator for performance ratio; MHS(Rated) is the nameplate value and does not track mode changes."
+      },
+      {
+        "name": "hashrate_pr",
+        "unit": "%",
+        "type": "number",
+        "handler": "src/telemetry/hashrate-pr.js",
+        "description": "Performance ratio reported by the firmware (stats PR(Avg)): achieved hashrate as a percentage of ideal. Below 90% is abnormal unless tune_status shows the miner is still tuning."
+      },
+      {
+        "name": "power",
+        "unit": "W",
+        "type": "number",
+        "handler": "src/telemetry/power.js",
+        "description": "Mains-side power draw, from stats PSU Input Power. This is the figure to bill and to sum for site power; PSU Output Power is the DC side and is roughly 6% lower. Zero while suspended."
+      },
+      {
+        "name": "power_limit",
+        "unit": "W",
+        "type": "number",
+        "handler": "src/telemetry/power-limit.js",
+        "description": "Power ceiling the firmware is currently enforcing, from stats Power Limit. This is the readback for setPowerLimit: compare it against the value you set rather than assuming the write took. Absent from the API document but reported by real firmware; null where the field is missing. Distinct from power, which is the instantaneous draw."
+      },
+      {
+        "name": "efficiency",
+        "unit": "W/TH",
+        "type": "number",
+        "handler": "src/telemetry/efficiency.js",
+        "description": "Power efficiency as reported by the firmware (stats W/T(Avg)), already in W/TH. Rises when hashrate falls at constant power, so a climbing value with steady power indicates degradation."
+      },
+      {
+        "name": "temperature",
+        "unit": "C",
+        "type": "number",
+        "handler": "src/telemetry/temperature.js",
+        "description": "Control temperature the firmware regulates against, from stats Temp. Exceeding Target Ctrl Temp (see psu_info and hashboards for detail) by more than 5C requires intervention. Per-board temperatures are in the hashboards channel."
+      },
+      {
+        "name": "fan_speed",
+        "unit": "RPM",
+        "type": "number",
+        "handler": "src/telemetry/fan-speed.js",
+        "description": "Highest fan speed across all fans. A value of 0 while status is running is a mechanical failure, not a configuration issue. Per-fan speeds and PWM are in the fans channel. The firmware does not label intake vs exhaust, so no directional channels are published."
+      },
+      {
+        "name": "power_mode",
+        "unit": "",
+        "type": "string",
+        "handler": "src/telemetry/power-mode.js",
+        "description": "Active mining mode as a canonical token: low_power, normal, high_performance, ultra_low_power, custom or smartboost. Null on firmware that reports this field as an integer, because the integer encoding is undocumented and is not guessed."
+      },
+      {
+        "name": "status",
+        "unit": "",
+        "type": "string",
+        "handler": "src/telemetry/status.js",
+        "description": "Power-manager state as a canonical token: idle, initializing, running, resuming, resume_failed, suspended, suspending or suspend_failed. Only running means the miner is hashing. suspended is an operator-requested state, not a fault. Null on firmware that reports this field as an integer."
+      },
+      {
+        "name": "tune_status",
+        "unit": "",
+        "type": "string",
+        "handler": "src/telemetry/tune-status.js",
+        "description": "Frequency tuning stage: tuning_idle, coarse_tuning, coarse_tuning_done, fine_tuning or fine_tuning_done. While coarse_tuning or fine_tuning, reduced hashrate is expected and no corrective action should be taken for up to 15 minutes."
+      },
+      {
+        "name": "uptime",
+        "unit": "s",
+        "type": "number",
+        "handler": "src/telemetry/uptime.js",
+        "description": "Seconds since the controller booted, from stats System Uptime. Resets on reboot but not on restartMiner."
+      },
+      {
+        "name": "accepted_shares",
+        "unit": "",
+        "type": "number",
+        "handler": "src/telemetry/accepted-shares.js",
+        "description": "Accepted shares since bdminer started, from summary Accepted. Resets on restartMiner as well as on reboot, so treat it as a counter with restarts, not a lifetime total."
+      },
+      {
+        "name": "rejected_shares",
+        "unit": "",
+        "type": "number",
+        "handler": "src/telemetry/rejected-shares.js",
+        "description": "Rejected shares since bdminer started, from summary Rejected. Interpret together with accepted_shares; use reject_rate for a normalized figure."
+      },
+      {
+        "name": "reject_rate",
+        "unit": "%",
+        "type": "number",
+        "handler": "src/telemetry/reject-rate.js",
+        "description": "Pool reject percentage from summary Pool Rejected%. Sustained values above a few percent point at pool or network problems rather than at the miner."
+      },
+      {
+        "name": "pool_url",
+        "unit": "",
+        "type": "string",
+        "handler": "src/telemetry/pool-url.js",
+        "description": "URL of the pool the miner is actually mining to: the stratum-active pool, otherwise the highest-priority alive pool. Null when no pool is alive, which is a real alarm rather than missing data."
+      },
+      {
+        "name": "pools",
+        "unit": "",
+        "type": "array",
+        "handler": "src/telemetry/pools.js",
+        "description": "Configured pools with status, priority, stratum state and share counters. Worker names are included because operators need them to tell accounts apart; no password field is ever mapped."
+      },
+      {
+        "name": "hashboards",
+        "unit": "",
+        "type": "array",
+        "handler": "src/telemetry/hashboards.js",
+        "description": "Per-board serial, online flag, chip counts, bad-chip ratio, frequency, temperature, hashrate and performance ratio. Null when the stats reply was truncated (see snap.truncated) — a short array would understate how many boards the miner has, so none is returned instead."
+      },
+      {
+        "name": "fans",
+        "unit": "",
+        "type": "array",
+        "handler": "src/telemetry/fans.js",
+        "description": "Per-fan index, PWM duty and speed in RPM. Fan count comes from the firmware's own Fan Count field. The firmware does not identify intake vs exhaust positions."
+      },
+      {
+        "name": "psu_info",
+        "unit": "",
+        "type": "object",
+        "handler": "src/telemetry/psu-info.js",
+        "description": "Power supply identity, firmware, input/output voltage and current, input/output power, fan speed, ambient and hot-spot temperature, efficiency, and the raw error word as errorWord. A non-zero errorWord is a hardware fault. The field is deliberately not called error: the runtime signals a failed telemetry channel with an error key, and a healthy PSU must not look like a broken channel."
+      },
+      {
+        "name": "chip_health",
+        "unit": "",
+        "type": "object",
+        "handler": "src/telemetry/chip-health.js",
+        "description": "Whole-miner chip count, bad chip count and derived ratio, plus the firmware's Error Chip string. Per-board detail is null when the stats reply was truncated, while the whole-miner counts stay valid. A rising bad-chip count between reboots indicates real degradation; a stable one is a manufacturing baseline."
+      },
+      {
+        "name": "device_info",
+        "unit": "",
+        "type": "object",
+        "handler": "src/telemetry/device-info.js",
+        "description": "Miner identity: model, resolved series, ASIC, MAC, control board and control board serial. The series is taken from the device config when the site declares one, otherwise inferred from the model string; seriesResolved reports which."
+      },
+      {
+        "name": "firmware_info",
+        "unit": "",
+        "type": "object",
+        "handler": "src/telemetry/firmware-info.js",
+        "description": "Firmware build, bdminer software version, API version, BIN version/number and liquid-cooling flag. The firmware build is what gates several commands, so it is the first thing to check when a write is refused."
+      },
+      {
+        "name": "errors",
+        "unit": "",
+        "type": "array",
+        "handler": "src/telemetry/errors.js",
+        "description": "Active fault and warning codes aggregated from the firmware's Error Code, Error Chip, PSU Error, per-board online/low-hash flags and stratum state. An empty array means nothing was reported. Entries carry a severity of alert, warn or info; info entries such as tuning or suspended are states, not faults."
+      },
+      {
+        "name": "capabilities",
+        "unit": "",
+        "type": "object",
+        "handler": "src/telemetry/capabilities.js",
+        "description": "What this specific device accepts: resolved series and firmware, the mining modes its firmware allows, and per-command supported/reason/fallback. Read this before offering or dispatching a command — the A2/A3/A4 mode sets differ and several operations are firmware-gated. When a write takes effect is NOT reported per device: every write names the channel that confirms it, and the miner decides the timing. A UI should disable unsupported controls rather than let a call fail. Also reports where each verdict came from: commands[name].source is \"discovered\" when the miner's own ascset subcommand list was read and \"table\" when it fell back to the built-in firmware table, with capabilitySource summarising which was used overall. firmwareNewerThanKnown flags a build newer than newestKnownFirmware — nothing is refused on that basis, but treat the capability view as possibly incomplete."
+      },
+      {
+        "name": "health",
+        "unit": "",
+        "type": "object",
+        "handler": "src/telemetry/health.js",
+        "description": "Overrides the runtime's built-in health channel. Reports OK, DEGRADED or OFFLINE with the alert list that justified it. Tuning and suspended miners stay OK: they are expected states, and treating them as faults is the most common source of false alarms in a mining fleet."
+      },
+      {
+        "name": "snap",
+        "unit": "",
+        "type": "object",
+        "handler": "src/telemetry/snap.js",
+        "description": "Full structured snapshot (stats, summary, pools, version, config) plus freshness metadata: ts, cached, ageMs, truncated and boardsComplete. Because the runtime pulls every channel on a fixed cadence, device reads are briefly cached and shared; ageMs tells you how stale this view is."
+      },
+      {
+        "name": "history",
+        "unit": "",
+        "type": "array",
+        "handler": "src/telemetry/history.js",
+        "description": "Recent telemetry samples held by the worker itself, newest first, each { ts, hashrateThs, powerW, temperatureC, powerMode, pmState, health, firmware }. Served from the worker's own SQLite store, not from the miner, so it answers even while the device is unreachable. Accepts { limit } — default 10, capped at 500. The firmware string is recorded with every sample, so a fleet that took an upgrade under a running worker can be found from the store rather than noticed by accident. Sampling is driven by the runtime's own telemetry cadence, so resolution equals that interval and history begins when this worker started, not when the miner did. Durable only when the device config sets dbPath; without it the store is in-memory and resets with the process."
+      }
+    ],
+    "commands": [
+      {
+        "name": "reboot",
+        "handler": "src/commands/reboot.js",
+        "description": "Reboots the whole miner controller. Measured on a real A2: the reply returns in about one second and the device is unreachable immediately afterwards, then answers again about 5.5 minutes later — longer than the 2-3 minutes the API document states — and hashrate ramps for several minutes after that. System Uptime resets and Boot Count increments. Not the same as restartMiner, which only restarts the bdminer process and leaves System Uptime alone. Any mining setting stored but not yet applied takes effect on this reboot.",
+        "constraints": "Enforced cooldown of 5 minutes, and rejected while another command is in flight. Never issue to a miner whose status is not running — an offline miner needs an operator, not a reboot. A timeout leaves the outcome unknown and must not be retried. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": []
+      },
+      {
+        "name": "restartMiner",
+        "handler": "src/commands/restart-miner.js",
+        "description": "Restarts the bdminer mining process without rebooting the controller. Share counters reset, Boot Count increments and the miner re-tunes; System Uptime is preserved. Measured on a real A2: about 30 seconds of unreachable API from a running state, and about 4.5 minutes when recovering from suspend. Any mining setting stored but not yet applied takes effect on this restart — which is how a miner set to sleep an hour ago stops the moment someone restarts it.",
+        "constraints": "Enforced cooldown of 60 seconds. Prefer this over reboot for recovering a stuck mining process, and use it in place of resume on firmware where resume is unavailable. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": []
+      },
+      {
+        "name": "setPowerMode",
+        "handler": "src/commands/set-power-mode.js",
+        "description": "Sets the mining mode. The firmware restarts bdminer automatically to apply it, so hashrate dips and tuning restarts.",
+        "constraints": "Accepted values differ by series and firmware: A2 accepts low_power, A3/A4 do not, and sleep requires firmware 2025101601 or later. Read the capabilities channel for the values this device accepts. Do not select a higher-power mode unless cooling is confirmed operational. Enforced cooldown of 60 seconds. READBACK MAY LAG: on older builds — roughly below 2026060101 — the firmware stores a mining setting and applies it at the next bdminer restart, while telemetry keeps reporting the running value, and the API cannot read the pending one back. This is not reported per device, because the device cannot answer it; so if the confirming channel still shows the old value, treat the write as ARMED rather than ignored, and do not re-send it. This command is where a lagging readback bites hardest: a miner set to sleep keeps hashing and keeps reporting its old mode, then stops the moment anything restarts bdminer. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [
+          {
+            "name": "mode",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "low_power",
+              "normal",
+              "high_performance",
+              "sleep"
+            ]
+          }
+        ],
+        "examples": [
+          {
+            "intent": "Switch to high performance overnight while power is cheap",
+            "steps": [
+              "Pull the capabilities channel and confirm high_performance is in powerModes for this device",
+              "Pull temperature, fan_speed and status; abort unless status is running and temperature is at least 5C below Target Ctrl Temp",
+              "Confirm no alert entries in the errors channel relate to cooling",
+              "Call setPowerMode with mode high_performance",
+              "Expect tune_status to enter coarse_tuning and hashrate to be unstable for up to 15 minutes; do not take further action during that window",
+              "After tuning completes, confirm hashrate_pr is back above 90 and temperature is stable"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "setPowerLimit",
+        "handler": "src/commands/set-power-limit.js",
+        "description": "Sets the miner's power ceiling in watts. The firmware restarts bdminer automatically and re-tunes, so hashrate takes 5-15 minutes to settle.",
+        "constraints": "DECLARED RANGE 2000-20000 W, refused by Kernel before dispatch and again by this handler. The envelope is deliberately wide, and is a typo guard rather than a correctness check: it has to hold every product at once, and inside it the firmware is the authority on whether a value is applied at all. What that means in practice, measured on real hardware: the firmware answers \"ASC 0 set OK\" to values it will not apply — 3000, 4200 and 4400 W were all accepted on an A2 while nothing changed — so a successful reply proves nothing about the value having taken effect. Read the power_limit channel to see what the miner is actually set to, before and after. For scale, settings observed on real products: 4300 W on the air-cooled A2, A3 Air and A4 Pro Air; 9500 W on an A2 Pro Hydro; 10000 W on an A3 Pro Hydro; 10800 W on an A4 Ultra Hydro. Cooling rather than series sets the scale, and the same A2 Pro Hydro moved from 7800 to 9500 W across a firmware upgrade — which is why the declared envelope is wide instead of fitted to a model: a range tight enough to be a real check would refuse a value a miner legitimately holds. Lowering the limit is safe; raising it requires confirmed cooling. Change by no more than about 10% at a time and verify between steps. Enforced cooldown of 60 seconds. A timeout leaves the outcome unknown and must not be retried. READBACK MAY LAG: on older builds — roughly below 2026060101 — the firmware stores a mining setting and applies it at the next bdminer restart, while telemetry keeps reporting the running value, and the API cannot read the pending one back. This is not reported per device, because the device cannot answer it; so if the confirming channel still shows the old value, treat the write as ARMED rather than ignored, and do not re-send it. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [
+          {
+            "name": "watts",
+            "type": "number",
+            "required": true,
+            "min": 2000,
+            "max": 20000
+          }
+        ],
+        "examples": [
+          {
+            "intent": "Shed load during a peak tariff window without stopping the miner",
+            "steps": [
+              "Pull power, hashrate_rt, status and temperature",
+              "Abort unless status is running; a suspended or initializing miner should be left alone",
+              "Target 90% of the current power reading, clamped to the contract's declared min",
+              "Call setPowerLimit with that value",
+              "Wait two telemetry cycles (about 20 seconds) and confirm power has fallen",
+              "If tune_status shows coarse_tuning, treat reduced hashrate as expected for up to 15 minutes",
+              "To restore, repeat in the opposite direction only after confirming temperature is stable"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "suspend",
+        "handler": "src/commands/suspend.js",
+        "description": "Stops mining, shuts down the PSU output and stops the fans. Measured on a real A2: power fell from about 4000 W to 95 W, the fans wound down to 0 RPM over roughly 35 seconds, and the PSU began reporting a non-zero error word because its output is off — which health reports as info.psu_output_off rather than a fault.",
+        "constraints": "The most disruptive supported operation. Fans stop, so the miner will not dissipate residual heat — do not suspend as a response to overheating; reduce power or stop airflow-independent load instead. Recovery needs resume, or restartMiner on firmware where resume is unavailable. Measured on a real A2 whose firmware has no resume: recovering with restartMiner took about 4.5 minutes before the API answered, far longer than a restartMiner from a running state, and hashrate then ramped for several more minutes. Enforced cooldown of 60 seconds. A timeout leaves the outcome unknown and must not be retried. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [],
+        "examples": [
+          {
+            "intent": "Participate in a grid demand-response event for a fixed window",
+            "steps": [
+              "Record the current power_mode and power so the prior state can be restored",
+              "Pull the capabilities channel and confirm resume is supported; if not, plan to recover with restartMiner",
+              "Call suspend",
+              "Confirm status becomes suspended and power reads 0 on the next telemetry cycle",
+              "When the window ends, call resume (or restartMiner) and confirm status returns to running",
+              "Confirm hashrate_rt recovers toward hashrate_ideal; allow 15 minutes for re-tuning"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "resume",
+        "handler": "src/commands/resume.js",
+        "description": "Resumes mining after suspend, restoring PSU output and fans.",
+        "constraints": "Requires firmware 2026060101 or later. The operation was removed from firmware 2025080401 through 2026053100; on those builds use restartMiner instead. The capabilities channel reports which applies and names the fallback. Enforced cooldown of 60 seconds. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": []
+      },
+      {
+        "name": "setupPools",
+        "handler": "src/commands/setup-pools.js",
+        "description": "Replaces the miner's pool configuration. Takes effect immediately without restarting bdminer; the first pool in the list becomes the highest priority.",
+        "constraints": "Changes where the miner's hashrate is credited. Read and store the current pools channel before calling so the previous configuration can be restored. Real hardware may report Pools Locked (see device_info.poolsLocked); a locked miner refuses this command, so check that flag before calling. PROVISIONAL LIMIT: at most 3 pools, pending confirmation of the firmware's own maximum. A timeout leaves the outcome unknown and must not be retried — read the pools channel to establish the actual state. Enforced cooldown of 30 seconds. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [
+          {
+            "name": "pools",
+            "type": "object",
+            "required": true
+          }
+        ],
+        "examples": [
+          {
+            "intent": "Move a rack to a different pool account",
+            "steps": [
+              "Pull the pools channel for every miner in scope and store the result as the rollback plan",
+              "Call setupPools with the new list, highest priority first",
+              "Confirm pool_url reports the new endpoint on the next telemetry cycle",
+              "Confirm accepted_shares starts increasing again within a few minutes; if it does not, roll back using the stored configuration",
+              "Note that accepted_shares and rejected_shares restart from zero, so do not read the reset as a fault"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "setTimezone",
+        "handler": "src/commands/set-timezone.js",
+        "description": "Sets the miner's timezone, used for its local log timestamps.",
+        "constraints": "No physical effect and fully reversible; this is the safest write on the device and the recommended first step when validating write access against real hardware. Accepts an IANA timezone name such as America/New_York. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [
+          {
+            "name": "tz",
+            "type": "string",
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "setPreheat",
+        "handler": "src/commands/set-preheat.js",
+        "description": "Configures boot preheating, which holds the miner before hashing until the PCB reaches a target temperature. Useful in cold climates where starting at low temperature harms tuning.",
+        "constraints": "ALL FOUR FIELDS ARE REQUIRED, verified on a real A2 (firmware 2026040101): omitting any one is refused with Missing \"<key>\", even though the API document presents temp and timeout as incidental. DECLARED RANGES, and they are the vendor document's own numbers rather than guesses (SealMinerAPI_V0.5 section 4.1.6): bootPreheatTemp 0-35 C, bootPreheatTimeout -1 to 600 seconds. Two of the three firmware behaviours here are silent, which is why this handler refuses a value instead of forwarding it: bootPreheatTemp is meant to be between 0 and the boot target of 35C, but the firmware does NOT enforce it — 99 is accepted — so the declared bound is the only protection there is; bootPreheatTimeout of -1 means wait until bootPreheatTemp is reached, with a 600 second ceiling the firmware enforces itself; and any positive value below 300 is silently RAISED to 300, so a caller that sets 100 would get 300 with no indication. THIS HANDLER THEREFORE ACCEPTS bootPreheatTimeout OF EXACTLY -1, OR 300 TO 600, and returns ERR_PARAM_RANGE for 0-299 rather than letting the firmware change the value quietly. The declared minimum of -1 is wider than that rule because the contract format offers only min and max and cannot express \"-1 or 300-600\"; the handler applies the exact rule. Setting enableTunePreheat off shortens tuning but may not reach the highest hashrate, and is meaningless in a warm environment. Enforced cooldown of 30 seconds. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [
+          {
+            "name": "enableBootPreheat",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "bootPreheatTemp",
+            "type": "number",
+            "required": true,
+            "min": 0,
+            "max": 35
+          },
+          {
+            "name": "bootPreheatTimeout",
+            "type": "number",
+            "required": true,
+            "min": -1,
+            "max": 600
+          },
+          {
+            "name": "enableTunePreheat",
+            "type": "boolean",
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "setFastRaiseFreq",
+        "handler": "src/commands/set-fast-raise-freq.js",
+        "description": "Enables or disables fast frequency ramping. The firmware restarts bdminer automatically and persists the setting to its configuration file.",
+        "constraints": "The firmware takes the flag as the string \"1\" or \"0\"; a JSON boolean is refused with Missing \"value\" and \"true\"/\"false\" with Invalid \"enable_fast_raise_freq\" — the client converts. Applying it restarts bdminer and starts a fresh tuning cycle, so do not toggle it repeatedly. Enforced cooldown of 60 seconds. READBACK MAY LAG: on older builds — roughly below 2026060101 — the firmware stores a mining setting and applies it at the next bdminer restart, while telemetry keeps reporting the running value, and the API cannot read the pending one back. This is not reported per device, because the device cannot answer it; so if the confirming channel still shows the old value, treat the write as ARMED rather than ignored, and do not re-send it. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [
+          {
+            "name": "enabled",
+            "type": "boolean",
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "setHostname",
+        "handler": "src/commands/set-hostname.js",
+        "description": "Sets the miner's hostname.",
+        "constraints": "Requires firmware 2025062602 or later. Changes how the device identifies itself on the network and in operator tooling, so keep it consistent with your inventory. Accepts letters, digits and hyphens, up to 63 characters, not starting or ending with a hyphen. Enforced cooldown of 30 seconds. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [
+          {
+            "name": "hostname",
+            "type": "string",
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "setNetwork",
+        "handler": "src/commands/set-network.js",
+        "description": "Sets the miner's IP configuration, either DHCP or a static address. Takes effect immediately without restarting bdminer.",
+        "constraints": "The highest-risk supported operation: a wrong address makes the miner unreachable and recovery requires physical access. Verify the address, netmask and gateway against the rack's subnet before calling, and change one miner at a time. When dhcp is 1 the remaining fields are ignored. Enforced cooldown of 5 minutes. Single attempt only — a timeout must never be retried; confirm the miner's new address out of band instead. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [
+          {
+            "name": "network",
+            "type": "object",
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "setIdleFanTimer",
+        "handler": "src/commands/set-idle-fan-timer.js",
+        "description": "Configures fan behaviour while the miner is idle: run continuously, stop, or cycle on and off.",
+        "constraints": "Requires firmware 2025081801 or later. DECLARED RANGES, refused by Kernel before dispatch and again by this handler: interval 1-86400 seconds, onDuration 0-86400 seconds, speed 0-100. The speed bound is the vendor document's own number, a percentage of maximum fan RPM; the two second counts are one second to one day and are typo guards, because the document gives units and behaviour but no numeric range and the firmware does not check either. This handler additionally requires all three to be integers and refuses onDuration greater than interval — neither rule is expressible in the contract format, which carries only a type, a minimum and a maximum. Units are seconds for interval and onDuration. With onDuration equal to interval the fans run continuously at the given speed; with onDuration 0 they stop entirely; otherwise they run for onDuration seconds out of every interval seconds. Stopping idle fans in a warm room can let residual heat accumulate. This is not a remedy for a failed fan. The API exposes no readback for this setting, so it cannot be confirmed through telemetry. Enforced cooldown of 30 seconds. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [
+          {
+            "name": "interval",
+            "type": "number",
+            "required": true,
+            "min": 1,
+            "max": 86400
+          },
+          {
+            "name": "onDuration",
+            "type": "number",
+            "required": true,
+            "min": 0,
+            "max": 86400
+          },
+          {
+            "name": "speed",
+            "type": "number",
+            "required": true,
+            "min": 0,
+            "max": 100
+          }
+        ]
+      },
+      {
+        "name": "setStratumDisconnectTimeout",
+        "handler": "src/commands/set-stratum-disconnect-timeout.js",
+        "description": "Sets how long the miner tolerates a dead stratum connection before acting on it. Takes effect immediately and is persisted to the firmware configuration.",
+        "constraints": "DECLARED RANGE 1-86400 seconds, refused by Kernel before dispatch and again by this handler, which also requires an integer. The vendor document (SealMinerAPI_V0.5 section 4.1.13) shows an example of 120 seconds and states no range, so one second to one day is a typo guard rather than a correctness check. Very short values make the miner react to normal pool jitter; very long values delay failover. No physical effect and reversible. The API exposes no readback for this setting, so it cannot be confirmed through telemetry. ASYNCHRONOUS: every write on this API replies before it executes, so a successful reply means the request was ACCEPTED, not applied. The result reports what was accepted, when it applies and which channel confirms it; confirm the effect yourself a telemetry cycle or two later rather than treating the reply as proof.",
+        "params": [
+          {
+            "name": "seconds",
+            "type": "number",
+            "required": true,
+            "min": 1,
+            "max": 86400
+          }
+        ]
+      }
+    ],
+    "health": {
+      "supportedStates": [
+        "OK",
+        "DEGRADED",
+        "OFFLINE"
+      ],
+      "alerts": [
+        "alert.overheat",
+        "alert.psu_overheat",
+        "alert.psu_error",
+        "alert.fan_failure",
+        "alert.hashboard_offline",
+        "alert.hashboard_low_hash",
+        "alert.bad_chip",
+        "alert.pool_disconnected",
+        "alert.device_error",
+        "alert.hashrate_low",
+        "alert.unreachable",
+        "warn.stats_truncated",
+        "warn.fields_unreadable",
+        "warn.enum_unreadable",
+        "warn.reject_rate_high",
+        "info.starting",
+        "info.psu_output_off",
+        "info.tuning",
+        "info.suspended",
+        "info.liquid_cooled",
+        "warn.firmware_unverified"
+      ],
+      "troubleshooting": [
+        "If info.tuning is present, the miner is running a frequency tuning cycle: reduced hashrate is expected for up to 15 minutes. Do not change power mode, power limit or pools during this window, and do not treat alert.hashrate_low as real until tuning finishes.",
+        "If info.suspended is present, an operator or automation suspended this miner. It is not a fault. Recover with resume, or with restartMiner on firmware where resume is unavailable.",
+        "If alert.fan_failure, a fan reads 0 RPM while the miner is running. This is a mechanical failure: dispatch a technician. Do not attempt to work around it with setIdleFanTimer, and do not raise power mode.",
+        "If alert.overheat, check fan_speed and the per-board temperatures in hashboards, then ambient intake temperature. Reduce power with setPowerLimit before considering a reboot, and never use suspend to cool a miner — suspend stops the fans.",
+        "If alert.psu_overheat or alert.psu_error, the power supply is the fault domain. Check intake temperature and airflow obstruction around the PSU. A non-zero PSU error word usually needs the unit replaced.",
+        "If alert.hashboard_offline, one board stopped reporting. Try restartMiner once; if the board is still offline after tuning completes, the board needs service.",
+        "If alert.hashboard_low_hash, the firmware flagged a board as underperforming while the others are fine. Check that board's temperature and frequency in the hashboards channel, then restartMiner once; a board that still reports low hash after tuning completes needs service.",
+        "If alert.device_error, the firmware reported its own error code, error chip, or a failed suspend/resume transition. Record the code from the errors channel before acting: it is the only place the firmware explains itself, and a reboot clears it without fixing the cause.",
+        "If alert.bad_chip is rising between reboots, chip degradation is real and the board should be scheduled for replacement. A stable bad-chip count is a manufacturing baseline, not a new fault.",
+        "If alert.pool_disconnected, verify the pool endpoint and the rack's network path before touching the miner; check whether sibling miners on the same switch show the same alert. Use setupPools only after confirming the current configuration is wrong.",
+        "If alert.hashrate_low without info.tuning, compare hashrate_pr with the per-board values in hashboards to see whether one board is responsible, then check temperature and power_mode before changing anything.",
+        "If warn.stats_truncated is present, the miner's stats reply was clipped and board-level channels are unavailable for this cycle. Whole-miner values are still valid. This is a protocol limitation, not a device fault; if it persists, pull the snap channel less often or raise the issue with the worker maintainer.",
+        "If warn.enum_unreadable is present, the miner runs firmware that reports mode and state as undocumented integers, so power_mode, status and tune_status read null. Upgrade the firmware to restore those channels. Numeric telemetry is unaffected.",
+        "If warn.reject_rate_high is present, the pool is rejecting an unusual share of work. This indicts the pool or the network path, not the miner, so it never degrades device health on its own — check sibling miners and the pool's own status page first.",
+        "If alert.unreachable is present, or status is OFFLINE, the miner did not answer at all. Do not issue reboot or any other write: a write to a miner in an unknown state can leave it in a worse one. Check power and the rack network path, then escalate to an operator.",
+        "If info.starting is present, bdminer restarted recently and hashrate is still ramping — observed taking several minutes on real hardware, and up to 4.5 minutes before the API answered at all when recovering from suspend. Low hashrate and full-speed fans are expected in that window; alert.hashrate_low and alert.fan_failure are suppressed while it lasts. Do not change power mode or power limit during a ramp.",
+        "If info.psu_output_off is present, the miner is suspended and its PSU reports a non-zero error word because the output has been deliberately shut down. It is not a fault and does not degrade health. A genuine PSU fault cannot be told apart while the output is off, so re-check once the miner is running again.",
+        "If info.liquid_cooled is present, the miner is water-cooled: it reports no fans, an empty fan list and only two temperature sensors per board, and that is not fan failure or missing data. Its reported temperature is NOT regulated against Target Ctrl Temp — measured healthy on an A4 Ultra Hydro at 67-69C against a target of 60C — so do not read the difference as overheating. Overheat is judged against an absolute threshold instead, which is a provisional value awaiting confirmation from SealMiner (see lib/provisional.js). The PSU also runs hotter than on air-cooled models: 71C ambient versus 28-34C.",
+        "If warn.firmware_unverified is present, the miner runs a firmware build newer than the one this worker was written against. Nothing is wrong with the device; what may be stale is this worker's description of it. Every firmware gate here is \"version >= X\", which assumes features are only ever added — and this firmware has already removed a command and restored it ten months later. Read the capabilities channel: capabilitySource \"device\" means which commands exist was read from the miner itself and is trustworthy, while the accepted mode values and whether a setting applies immediately are still assumed. capabilitySource \"table\" means none of it could be confirmed. Either way, prefer reading a setting back over trusting a declared capability, and report the firmware version so the table can be updated.",
+        "If warn.fields_unreadable, the miner is probably fine and this worker's parser is not: a stats key it reads by name has stopped arriving, which firmware has done before by renaming one (Chip voltage to Chip Voltage, BDMiner to Bdminer). Capability discovery cannot catch this — ascset help reports which commands exist, never which keys a stats reply uses. Capture the reply with scripts/dump-stats.js and diff it against mock/fixtures/, then fix the parser to accept both spellings; FIRMWARE.md has the procedure. Until then the named channels for those fields read null, and the snap channel still carries the raw reply."
+      ]
+    },
+    "errors": {
+      "ERR_API_TIMEOUT": "The miner did not answer within the configured timeout. Reads may be retried; a write that timed out has an unknown outcome and must not be retried.",
+      "ERR_API_CONNECTION": "The TCP connection to the miner's 4028 API failed or was reset. Check the address, the rack network path and whether the miner is powered.",
+      "ERR_API_RESPONSE_INVALID": "The miner returned something that is not valid JSON, or returned nothing. Usually means the port is answering but is not the bdminer API.",
+      "ERR_API_RESPONSE_TOO_LARGE": "The reply exceeded the client's size ceiling. Expected only from a malfunctioning peer.",
+      "ERR_API_REQUEST_INVALID": "The worker built a malformed request. Internal error; report it.",
+      "ERR_INVALID_CMD": "The firmware rejected the command as unknown (reply code 14). Usually a firmware-gated operation on a build that does not have it — check the capabilities channel.",
+      "ERR_JSON_CMD": "The firmware rejected the request's JSON (reply code 23).",
+      "ERR_ACCESS_DENIED": "The firmware refused the operation (reply code 45). API write access is controlled by the miner and must be enabled there; it should not be left enabled after use.",
+      "ERR_ASCSET_FAILED": "The firmware accepted the ascset request but could not apply it (reply code 120). The message names the rejected value, commonly a mining mode the series does not support.",
+      "ERR_UPDATE_POOLS_FAILED": "The firmware could not apply the pool configuration (reply code 201).",
+      "ERR_NO_AVAILABLE_POOL": "The pool list contained no usable pool (reply code 8).",
+      "ERR_COMMAND_FAILED": "The firmware reported a failure status without a documented code.",
+      "ERR_STATS_TRUNCATED": "The miner's stats reply was clipped (reply id 0) and board-level data is incomplete. Whole-miner values remain valid; board-level channels report null rather than a partial list.",
+      "ERR_STATS_SHAPE_INVALID": "The stats reply did not have the expected shape.",
+      "ERR_SECTION_MISSING": "The reply was missing the payload section the command should return.",
+      "ERR_COMMAND_COOLDOWN": "The command was issued before its declared cooldown elapsed. The message reports the remaining milliseconds.",
+      "ERR_COMMAND_IN_PROGRESS": "A command of this type is already running against this device. Wait for it to settle rather than issuing another.",
+      "ERR_COMMAND_NOT_SUPPORTED_ON_MODEL": "This device's series does not support the command.",
+      "ERR_COMMAND_NOT_SUPPORTED_ON_FIRMWARE": "This device's firmware does not support the command. The capabilities channel reports the required version and any fallback.",
+      "ERR_MODE_NOT_SUPPORTED_ON_SERIES": "The requested mining mode is not accepted by this series or firmware. A2 accepts low_power; A3 and A4 do not. sleep requires firmware 2025101601 or later.",
+      "ERR_DEVICE_CONFIG_INVALID": "The device configuration is missing or malformed. address is required; port defaults to 4028; series, when given, must be A2, A3 or A4.",
+      "ERR_PARAM_REQUIRED": "A required parameter was omitted. The message names it.",
+      "ERR_PARAM_TYPE": "A parameter had the wrong type. The message names it and the expected type.",
+      "ERR_PARAM_RANGE": "A numeric parameter fell outside its declared range. The message names it and the bounds.",
+      "ERR_PARAM_ENUM": "A parameter was not one of its allowed values. The message names it and the allowed set.",
+      "ERR_PARAM_SHAPE": "An object parameter did not have the required shape, for example a pool entry without a url or a static network config without an ip."
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "STATUS": [
+    {
+      "STATUS": "S",
+      "When": 1789959758,
+      "Code": 9,
+      "Msg": "1 ASC(s)",
+      "Description": "bdminer 4.11.1"
+    }
+  ],
+  "DEVS": [
+    {
+      "ASC": 0,
+      "Name": "A2",
+      "ID": 0,
+      "Enabled": "Y",
+      "Status": "Alive",
+      "Temperature": 70,
+      "MHS av": 237646444.82,
+      "MHS 5s": 94393509.73,
+      "MHS 1m": 188996203.51,
+      "MHS 5m": 254735624.78,
+      "MHS 15m": 265919443.17,
+      "Accepted": 17967,
+      "Rejected": 0,
+      "Hardware Errors": 0,
+      "Utility": 3.25,
+      "Last Share Pool": 0,
+      "Last Share Time": 1789959731,
+      "Total MH": 78830163428561,
+      "Diff1 Work": 18354077696,
+      "Difficulty Accepted": 18353029120,
+      "Difficulty Rejected": 0,
+      "Last Share Difficulty": 1048576,
+      "Last Valid Work": 1789959731,
+      "Device Hardware%": 0,
+      "Device Rejected%": 0,
+      "Device Elapsed": 331712
+    }
+  ],
+  "id": 1
+}
